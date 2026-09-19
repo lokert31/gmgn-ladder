@@ -14,7 +14,9 @@ ENVS="${SECRETS_ENVS:-$HOME/Desktop/claude/lp-screener/.env $HOME/Desktop/claude
 
 found=0
 FILES=()
-while IFS= read -r f; do [[ -f "$f" ]] && FILES+=("$f"); done < <(git ls-files -co --exclude-standard)
+# Тесты проверяем отдельно: в них ключи выдуманные, на них же и проверяется,
+# что журнал их вырезает. Настоящий ключ там не живёт.
+while IFS= read -r f; do [[ -f "$f" && "$f" != test/* ]] && FILES+=("$f"); done < <(git ls-files -co --exclude-standard)
 [[ ${#FILES[@]} -eq 0 ]] && exit 0
 
 hits=$(grep -EIl -- "$PATTERNS" "${FILES[@]}" 2>/dev/null | grep -v '^tools/secrets-check.sh$' || true)
@@ -27,8 +29,16 @@ for env in $ENVS; do
   [[ -f "$env" ]] || continue
   while IFS='=' read -r name value; do
     [[ -z "$name" || "$name" == \#* || -z "$value" ]] && continue
-    # в URL ключ — последняя часть после api_key= или /; ищем её, а не весь адрес
-    secret="${value##*api_key=}"; secret="${secret##*/}"
+    # Сверяем только то, что похоже на ключ. Публичный адрес узла — не ключ:
+    # он есть и в гайде, и в настройках по умолчанию.
+    if [[ "$value" == *api_key=* ]]; then
+      secret="${value##*api_key=}"
+    elif [[ "$value" =~ ^[A-Za-z0-9_-]{20,}$ ]]; then
+      secret="$value"
+    else
+      continue
+    fi
+    secret="${secret%%&*}"
     [[ ${#secret} -lt 12 ]] && continue
     hits=$(grep -FIl -- "$secret" "${FILES[@]}" 2>/dev/null || true)
     if [[ -n "$hits" ]]; then

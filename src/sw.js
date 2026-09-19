@@ -10,6 +10,7 @@
  * подсматривает bridge.js на живых страницах gmgn.ai и складывает в storage.
  */
 
+importScripts('log.js');
 importScripts('chain.js');
 importScripts('watch.js');
 
@@ -409,6 +410,9 @@ async function lpScanNow(chain, addr) {
     return { ok: false, error: String(e && e.message) };
   }
 }
+
+const LOG = self.GHO_LOG ? self.GHO_LOG.use('sw').catchAll().at('sw') : null;
+const logErr = (msg, data) => { if (LOG) LOG.err(msg, data); };
 
 const HANDLERS = {
   /**
@@ -980,6 +984,11 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (!fn) return false;
   Promise.resolve(fn(msg, sender))
     .then(reply)
-    .catch((e) => reply({ ok: false, error: 'threw', message: String(e && e.message) }));
+    .catch((e) => {
+      // Без журнала такая ошибка видна только в консоли воркера, а туда
+      // никто не смотрит: наружу уходит просто «не получилось».
+      logErr('обработчик ' + msg.type + ' упал', e);
+      reply({ ok: false, error: 'threw', message: String(e && e.message) });
+    });
   return true;   // ответ придёт асинхронно
 });

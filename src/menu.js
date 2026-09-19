@@ -100,3 +100,44 @@
     });
   } catch (e) { /* нет хранилища */ }
 })();
+
+/* ---------- журнал ----------
+ *
+ * Ошибка в фоновой вкладке сторожа или в сервис-воркере иначе не видна
+ * никому. Показываем последние записи, даём скопировать их одной кнопкой.
+ */
+(function () {
+  const LOG = window.GHO_LOG;
+  const box = document.getElementById('log');
+  const level = document.getElementById('loglevel');
+  const count = document.getElementById('logcount');
+  if (!LOG || !box || !level) return;
+  const RANK = { error: 3, warn: 2, info: 1 };
+
+  async function show() {
+    const all = await LOG.read();
+    const min = level.value === 'error' ? 3 : level.value === 'warn' ? 2 : 1;
+    const list = all.filter((r) => (RANK[r.level] || 1) >= min).slice(-200);
+    count.textContent = list.length + ' из ' + all.length;
+    box.textContent = list.length ? LOG.text(list.slice().reverse()) : 'пусто';
+  }
+
+  level.addEventListener('change', show);
+  document.getElementById('logcopy').addEventListener('click', async () => {
+    const all = await LOG.read();
+    try {
+      await navigator.clipboard.writeText(LOG.text(all));
+      count.textContent = 'скопировано';
+    } catch (e) {
+      count.textContent = 'не скопировалось: ' + (e && e.message);
+    }
+  });
+  document.getElementById('logclear').addEventListener('click', async () => {
+    await LOG.clear();
+    show();
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[LOG.KEY]) show();
+  });
+  show();
+})();

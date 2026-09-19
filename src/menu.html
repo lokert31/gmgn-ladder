@@ -77,6 +77,23 @@
   <label style="display:block;margin-top:8px">RPC для чтения<small style="color:var(--dim)"> — необязательно, быстрый, например OrbitFlare</small>
     <input type="text" spellcheck="false" placeholder="https://robinhood.rpc.orbitflare.com?api_key=…" data-s="ghoRpc.robinhoodState"></label>
 </section>
+<section>
+  <h2>Журнал</h2>
+  <div class="row" style="gap:6px;flex-wrap:wrap">
+    <select id="loglevel" title="Что показывать">
+      <option value="error">только ошибки</option>
+      <option value="warn" selected>ошибки и предупреждения</option>
+      <option value="all">всё подряд</option>
+    </select>
+    <button id="logcopy">скопировать</button>
+    <button id="logclear">очистить</button>
+    <span id="logcount" style="color:var(--dim)"></span>
+  </div>
+  <div id="log" style="margin-top:8px;max-height:260px;overflow:auto;font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;color:var(--dim)"></div>
+  <small style="color:var(--dim)">Сюда попадают ошибки воркера, сторожа и страниц: что не собралось, что не закрылось, какой свап не прошёл и сколько было попыток. Ключи из ссылок вырезаются.</small>
+</section>
+
+<script src="log.js"></script>
 <script src="menu.js"></script>
 </body>
 </html>

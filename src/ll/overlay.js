@@ -9,6 +9,13 @@
   if (window.__LLC_OVERLAY__) return;
   window.__LLC_OVERLAY__ = true;
 
+  // Журнал: пишем сюда всё, из-за чего дело не сделалось. Без него ошибку во
+  // вкладке сторожа никто не видит — она фоновая. Нет журнала (старый
+  // манифест или тесты) — работаем молча, но не падаем.
+  const NOLOG = { info() {}, warn() {}, err() {} };
+  const LOG = (typeof window !== 'undefined' && window.GHO_LOG)
+    ? window.GHO_LOG.use('overlay').catchAll().at('overlay') : NOLOG;
+
   const KEY = 'llChart';
   const PKEY = 'llPairs';     // леддеры, как их отдаёт сам сайт
   const RKEY = 'llRungs';     // ступени по токенам: таблица позиций видна не всегда
@@ -46,6 +53,8 @@
     pumpPct: 50,      // на сколько вырастет цена
     windowMin: 5,     // за сколько минут
     minUsd: 5,        // ниже этой суммы фисы не собираем; 0 — собирать любые
+    retryTimes: 3,    // сколько раз пробовать, если транзакция не прошла
+    slipStep: 0,      // на сколько поднимать проскальзывание на повторе, %; 0 — не трогать
     quietSec: 60,     // как часто ходить на страницу, пока повод держится, секунд
     everySec: 5,      // как часто спрашиваем цену
     edgeOn: false,    // включать отдельно
@@ -1147,6 +1156,7 @@
       'feesSec', 'keepTabs', 'maxTabs', 'pumpPct', 'windowMin', 'minUsd',
       'quietSec', 'everySec', 'edgeOn', 'edgePct', 'fadePct', 'edgeShift',
       'edgeAct', 'edgeHi', 'edgeLo', 'edgeSplit', 'watchSkip', 'takeLevels', 'takeGone', 'tokenPump',
+      'retryTimes', 'slipStep',
       'depthThin', 'nearPct', 'depthSec', 'holders', 'zoom', 'geom', 'tabs',
       'active',
     ];
@@ -2266,8 +2276,14 @@
         }
         step('жму Collect (' + n + ')');
         const seen = new Set(retryBanners());
+        const bad = new Set(failNotes());
         tap(btn);
         if (await confirmIfAsked()) step('подтвердил');
+        const note = await newFailNote(bad, 6000);
+        if (note) {
+          LOG.warn('сбор: транзакция не прошла', { why: note, token: (pageToken() || {}).addr });
+          step('транзакция не прошла: ' + note);
+        }
         if (await newRetryBanner(seen)) {
           // Страница живёт со старой сессией — повтор здесь же не лечит,
           // помогает только обновление. Вкладку сторожа обновит сторож и
@@ -2319,6 +2335,85 @@
    */
   const RE_RETRY = /session (refreshed|expired)|please retry|try again/i;
 
+  /*
+   * Свап не всегда проходит с первого раза: не хватило газа, цена ушла за
+   * проскальзывание, узел ответил не сразу. Такое лечится повтором — поэтому
+   * неудачу распознаём по тексту на странице и пробуем ещё раз.
+   */
+  const RE_SWAPFAIL = /slippage|insufficient|not enough|too little|failed|revert|underpriced|replacement|nonce|timeout|expired deadline|rejected|error/i;
+
+  function failNotes() {
+    const out = [];
+    for (const el of document.querySelectorAll('body *')) {
+      if (el.children.length || el.offsetParent === null) continue;
+      const text = (el.textContent || '').trim();
+      if (text.length > 200 || !RE_SWAPFAIL.test(text)) continue;
+      out.push(el);
+    }
+    return out;
+  }
+
+  /** Появилась ли новая жалоба на неудачу после нажатия. */
+  async function newFailNote(before, ms = 8000) {
+    for (let i = 0; i < Math.ceil(ms / 400); i++) {
+      await wait(400);
+      const hit = failNotes().find((el) => !before.has(el));
+      if (hit) return (hit.textContent || '').trim().slice(0, 120);
+    }
+    return null;
+  }
+
+  /** Поле «Slippage» на странице: на повторе его можно поднять. */
+  function slipInput() {
+    for (const el of visInputs()) {
+      let node = el;
+      for (let i = 0; i < 4 && node.parentElement; i++) {
+        node = node.parentElement;
+        if (/slippage/i.test(node.textContent || '')) return el;
+      }
+    }
+    return null;
+  }
+
+  function bumpSlippage(step) {
+    const el = slipInput();
+    if (!el || !(step > 0)) return null;
+    const was = Number(el.value);
+    if (!isFinite(was)) return null;
+    const next = Math.min(50, was + step);
+    if (next === was) return null;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(el, String(next));
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return { was, next };
+  }
+
+  /**
+   * Повторить попытку, пока не выйдет. Останавливаемся сразу, если дело
+   * сделано или нужна перезагрузка страницы: её повтором не вылечишь.
+   * Каждая попытка попадает в журнал — по нему потом видно, на чём встало.
+   */
+  const RETRY_GAP = [5000, 12000, 25000];
+  async function tryTimes(label, attempt) {
+    const times = Math.max(1, Math.min(5, Number(S.retryTimes) || 1));
+    let res = { ok: false, why: 'не пробовали' };
+    for (let i = 1; i <= times; i++) {
+      res = (await attempt(i)) || { ok: false, why: 'без ответа' };
+      if (res.ok || res.reload) {
+        if (i > 1) LOG.info(label + ': вышло с ' + i + '-й попытки', { why: res.why });
+        return { ...res, tries: i };
+      }
+      LOG.warn(label + ': попытка ' + i + ' из ' + times + ' не прошла', { why: res.why });
+      if (i >= times) break;
+      const bumped = bumpSlippage(Number(S.slipStep) || 0);
+      if (bumped) LOG.info(label + ': поднял проскальзывание', bumped);
+      await wait(RETRY_GAP[Math.min(i - 1, RETRY_GAP.length - 1)]);
+    }
+    LOG.err(label + ': не вышло за ' + times + ' попыток', { why: res.why });
+    return { ...res, tries: times };
+  }
+
   function retryBanners() {
     const out = [];
     for (const el of document.querySelectorAll('body *')) {
@@ -2362,32 +2457,38 @@
       hint: 'Отметить все позиции и нажать общую кнопку «Close (N)».' + BR
         + 'Это выход из позиции целиком, а не сбор комиссий.',
       run: async () => {
-        actNow(90000);
-        const ok = await ensureSelection();
-        if (!ok) return { ok: false, why: 'не смог отметить все позиции' };
-        const btn = findBtn(RE_CLOSE_ALL);
-        if (!btn) return { ok: false, why: 'кнопки «Close (N)» нет' };
-        const before = rowCount();
-        const seen = new Set(retryBanners());
-        tap(btn);
-        await confirmIfAsked();
-        if (await newRetryBanner(seen)) {
-          // Закрытие не прошло: страница со старой сессией. Нужна перезагрузка.
-          actingUntil = 0;
-          return { ok: false, reload: true, why: 'сайт обновил сессию' };
-        }
-        // Нажали — ещё не закрыли. Ждём, пока позиции уйдут со страницы:
-        // по этому ответу снимаются тейки, и снять их при непрошедшей
-        // транзакции значит оставить позиции без защиты.
-        let gone = false;
-        for (let i = 0; i < 30; i++) {
-          await wait(2000);
-          const left = rowCount();
-          if (left < before || (!findBtn(RE_CLOSE_ALL) && left === 0)) { gone = true; break; }
-        }
+        actNow(180000);
+        const res = await tryTimes('закрытие позиций', async () => {
+          const ok = await ensureSelection();
+          if (!ok) return { ok: false, why: 'не смог отметить все позиции' };
+          const btn = findBtn(RE_CLOSE_ALL);
+          if (!btn) return { ok: false, why: 'кнопки «Close (N)» нет' };
+          const before = rowCount();
+          const seen = new Set(retryBanners());
+          const bad = new Set(failNotes());
+          tap(btn);
+          await confirmIfAsked();
+          if (await newRetryBanner(seen)) {
+            // Закрытие не прошло: страница со старой сессией. Нужна перезагрузка.
+            return { ok: false, reload: true, why: 'сайт обновил сессию' };
+          }
+          // Свап мог не пройти: газ, проскальзывание, отказ узла. Это
+          // повторяемо — возвращаем причину, и попытка будет ещё одна.
+          const note = await newFailNote(bad, 6000);
+          if (note) return { ok: false, why: 'свап не прошёл: ' + note };
+          // Нажали — ещё не закрыли. Ждём, пока позиции уйдут со страницы:
+          // по этому ответу снимаются тейки, и снять их при непрошедшей
+          // транзакции значит оставить позиции без защиты.
+          for (let i = 0; i < 30; i++) {
+            await wait(2000);
+            const left = rowCount();
+            if (left < before || (!findBtn(RE_CLOSE_ALL) && left === 0)) return { ok: true };
+          }
+          return { ok: false, why: 'нажал Close, но позиции не ушли за минуту' };
+        });
         actingUntil = 0;
         forgetRungs(pageToken() || active());
-        return gone ? { ok: true } : { ok: false, why: 'нажал Close, но позиции не ушли за минуту' };
+        return res;
       },
     };
   }
@@ -3406,6 +3507,10 @@ select.btn { padding: 3px 4px; }
             &nbsp;&nbsp;область: <input class="num" type="number" data-n="edgePct" min="0" step="1"> % от границы</label>
           <label title="Ниже этой суммы собирать невыгодно: газ съест больше, чем соберём. Поставь 0, чтобы собирать любую сумму">
             не собирать меньше $<input class="num" type="number" data-n="minUsd" min="0" step="1"></label>
+          <label title="Свап не всегда проходит с первого раза: не хватило газа, цена ушла за проскальзывание, узел не ответил. Столько раз пробуем ещё, с паузами 5, 12 и 25 секунд. Каждая попытка попадает в журнал">
+            повторять при неудаче <input class="num" type="number" data-n="retryTimes" min="1" max="5" step="1"> раз</label>
+          <label title="Если свап срывается из-за проскальзывания, на каждом повторе поднимаем поле Slippage на сайте на столько процентов. 0 — не трогать. Больше проскальзывание — хуже цена, но выше шанс, что пройдёт">
+            &nbsp;&nbsp;и поднимать проскальзывание на <input class="num" type="number" data-n="slipStep" min="0" max="20" step="1"> %</label>
           <div class="note cost"></div>
           <div class="note tabsbox" title="Сторож работает только в своих вкладках — твои он не трогает. Здесь видно, на каждый ли леддер есть живая вкладка"></div>
           <div class="row">

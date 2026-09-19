@@ -1899,3 +1899,69 @@ test("истёкшая сессия: своя вкладка входит зан
   const sw = fs.readFileSync(path.join(__dirname, "..", "src", "sw.js"), "utf8");
   assert.ok(sw.includes("own = self.GHO_WATCH.isMine(id)"), "своя ли вкладка, решает сторож, а не страница");
 });
+
+test("свап не прошёл — пробуем ещё раз, а не считаем дело сделанным", () => {
+  const src = fs.readFileSync(
+    path.join(__dirname, "..", "src", "ll", "overlay.js"),
+    "utf8",
+  );
+  assert.match(src, /RE_SWAPFAIL/, "неудачу свапа никто не распознаёт");
+  assert.match(
+    src,
+    /async function tryTimes/,
+    "нет повторов: одна неудачная транзакция — и позиция осталась открытой",
+  );
+  const close = src.slice(
+    src.indexOf("function closeAction"),
+    src.indexOf("function siteActions"),
+  );
+  assert.ok(
+    close.includes("tryTimes("),
+    "закрытие позиций должно повторяться при неудаче",
+  );
+  assert.ok(
+    close.includes("newFailNote("),
+    "после нажатия надо смотреть, не ругнулся ли сайт",
+  );
+  assert.ok(
+    /slipStep/.test(src) && /function bumpSlippage/.test(src),
+    "на повторе должно подниматься проскальзывание",
+  );
+  // Перезагрузку страницы повтором не лечат: такой ответ прерывает попытки.
+  assert.ok(
+    /if \(res\.ok \|\| res\.reload\)/.test(src),
+    "повтор не должен идти по кругу, когда нужна перезагрузка",
+  );
+});
+
+test("в журнал пишут и воркер, и окно", () => {
+  const sw = fs.readFileSync(path.join(__dirname, "..", "src", "sw.js"), "utf8");
+  assert.ok(
+    sw.includes("importScripts('log.js')") ||
+      sw.includes('importScripts("log.js")'),
+    "воркер не подключает журнал",
+  );
+  assert.match(sw, /GHO_LOG/, "воркер журналом не пользуется");
+  const ov = fs.readFileSync(
+    path.join(__dirname, "..", "src", "ll", "overlay.js"),
+    "utf8",
+  );
+  assert.match(ov, /window\.GHO_LOG/, "окно журналом не пользуется");
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", "manifest.json"), "utf8"),
+  );
+  for (const part of manifest.content_scripts) {
+    if (part.world === "MAIN") continue;
+    assert.equal(
+      part.js[0],
+      "src/log.js",
+      "журнал должен подключаться первым на " + part.matches.join(","),
+    );
+  }
+  const menu = fs.readFileSync(
+    path.join(__dirname, "..", "src", "menu.html"),
+    "utf8",
+  );
+  assert.match(menu, /id="log"/, "в меню нет самого журнала");
+  assert.match(menu, /id="logcopy"/, "журнал нельзя скопировать");
+});

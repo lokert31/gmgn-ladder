@@ -1658,6 +1658,17 @@ function recordOutcome(msg, r, how, usd) {
   if (r && r.did === "login") loginLost("вкладка сторожа показывает страницу входа");
   const did = (r && r.did) || (r && r.handled ? "unknown" : "refused");
   const text = DID_TEXT[did] || "ни одна вкладка не взялась";
+  // Что не вышло — в журнал: по нему потом видно, сорвался свап, слетел вход
+  // или вкладка вообще не взялась за дело.
+  if (self.GHO_LOG && did !== "collected" && did !== "closed") {
+    self.GHO_LOG.at("watch").warn("не сделано: " + text, {
+      token: msg.label || msg.addr,
+      reason: msg.reason,
+      why: (r && r.why) || "",
+      tries: (r && r.tries) || 1,
+      how,
+    });
+  }
   remember({
     at: Date.now(),
     what: msg.label || String(msg.addr || "").slice(0, 10),
