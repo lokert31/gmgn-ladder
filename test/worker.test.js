@@ -1540,3 +1540,13 @@ test('курс ETH не ищет пулы WETH по логам всей цепи
   vm.runInContext('ethPrice = { at: Date.now() - 2 * 3600000, usd: 2400 }', scope);
   assert.equal(await quoteUsd({}, 'robinhood', ZERO), 0, 'курсу старше часа не верим');
 });
+
+test('сторож не собирает на пампе там, где памп выключен по токену', () => {
+  const src = fs.readFileSync(path.join(SRC, 'watch.js'), 'utf8');
+  const at = src.indexOf('const hit =');
+  assert.ok(at > 0, 'в стороже нет решения по пампу');
+  const near = src.slice(at, at + 200);
+  assert.match(near, /own\.off === true/,
+    'условие «памп выключен у этого токена» не проверяется: ' + near.slice(0, 120));
+  assert.ok(src.includes('pump: S.tokenPump'), 'настройки пампа по токену до сторожа не доезжают');
+});

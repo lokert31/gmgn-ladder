@@ -195,3 +195,38 @@ test('отметка края от прошлой лесенки снимает�
     w.close();
   }
 });
+
+test('памп можно выключить у отдельного токена: настройка доезжает до сторожа', async () => {
+  const T = '0x905b79845eaea281e4200f206fe7920dad685dd3';
+  const KEY = 'robinhood:' + T;
+  const store = {
+    // Без открытой вкладки окно не рисует настройки вовсе.
+    llChart: { watchOn: true, pumpOn: true, open: true, menu: true,
+               tabs: [{ chain: 'robinhood', addr: T, label: 'AAA/USDG' }] },
+    llPairs: { pairs: [{ chainId: 4663, token0: T, token1: USDG, symbols: 'AAA/USDG',
+                         ids: ['1'], lo: 0.0001, hi: 0.0007, group: 'g1' }], savedAt: Date.now() },
+  };
+  const w = await bootOverlay(store);
+  try {
+    // Панель живёт в теневом дереве — снаружи её не видно.
+    const root = w.dom.window.document.getElementById('llc-host').shadowRoot;
+    const sel = root.querySelector('.menu .pumptok');
+    const off = root.querySelector('.menu [data-a="pumpoff"]');
+    assert.ok(sel && off, 'в настройках нет кнопки «не собирать на пампе»');
+    sel.value = KEY;
+    off.click();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(w.store.llChart.tokenPump[KEY].off, true, 'запрет не сохранился');
+    assert.equal(w.store.llWatch.pump[KEY].off, true, 'сторож о запрете не узнал');
+    const chip = [...root.querySelectorAll('.menu .pumps .chip')].map((c) => c.textContent).join('|');
+    assert.match(chip, /памп выкл/, 'в списке не видно, что памп выключен: ' + chip);
+
+    // Снимаем запрет тем же переключателем на чипе.
+    root.querySelector('.menu .pumps .chip .pumpoff').click();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.ok(!(w.store.llChart.tokenPump[KEY] || {}).off, 'запрет не снялся');
+    assert.deepEqual(w.errors, []);
+  } finally {
+    w.close();
+  }
+});

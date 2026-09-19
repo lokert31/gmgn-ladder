@@ -1199,8 +1199,9 @@ test('главный выключатель отделён от срабатыв
   assert.ok(src.includes('data-c="watchOn"') && src.includes('data-c="pumpOn"'),
     'нужны две разные галки: общая и про импульс');
   const watch = fs.readFileSync(path.join(__dirname, '..', 'src', 'watch.js'), 'utf8');
-  assert.ok(watch.includes('S.pumpOn === false ? null : impulse('),
-    'выключенный импульс не должен глушить уровни и край');
+  const hit = watch.slice(watch.indexOf('const hit ='), watch.indexOf('const hit =') + 200);
+  assert.ok(/S\.pumpOn === false[\s\S]*impulse\(/.test(hit),
+    'выключенный импульс не должен глушить уровни и край: ' + hit.slice(0, 120));
   const push = src.slice(src.indexOf('function pushWatch'), src.indexOf('function save()'));
   assert.ok(push.includes('pumpOn'), 'настройка не доезжает до сторожа');
 });

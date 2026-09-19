@@ -517,6 +517,21 @@
     save(); pushWatch(); showPumps();
   }
 
+  /**
+   * Не собирать на пампе по этому токену. Условия при этом не трогаем: снял
+   * запрет — снова действуют его собственные или общие. Остальные поводы
+   * (порог, уровни, край леддера) работают как работали.
+   */
+  function togglePumpOff(key, off) {
+    if (!key) return;
+    const box = { ...(S.tokenPump || {}) };
+    const own = { ...(box[key] || {}) };
+    if (off) own.off = true; else delete own.off;
+    if (Object.keys(own).length) box[key] = own; else delete box[key];
+    S.tokenPump = box;
+    save(); pushWatch(); showPumps();
+  }
+
   function dropPump(key) {
     const box = { ...(S.tokenPump || {}) };
     delete box[key];
@@ -546,11 +561,19 @@
       const chip = document.createElement('span');
       chip.className = 'chip';
       const parts = [];
+      if (own.off) parts.push('памп выкл');
       if (own.pumpPct !== undefined) parts.push('+' + own.pumpPct + '%');
       if (own.windowMin !== undefined) parts.push(own.windowMin + ' мин');
       if (own.fadePct !== undefined) parts.push('откат ' + own.fadePct + '%');
       chip.append(document.createTextNode(
         (names.get(key) || key.split(':')[1].slice(0, 8)) + ' ' + parts.join(' · ')));
+      const sw = document.createElement('b');
+      sw.className = 'pumpoff';
+      sw.textContent = own.off ? '⏻' : '⦸';
+      sw.title = own.off ? 'Снова собирать на пампе по этому токену'
+        : 'Не собирать на пампе по этому токену';
+      sw.addEventListener('click', () => togglePumpOff(key, !own.off));
+      chip.append(sw);
       const x = document.createElement('b');
       x.textContent = '×';
       x.title = 'Вернуть общие условия';
@@ -3446,6 +3469,7 @@ select.btn { padding: 3px 4px; }
             <input class="num" type="number" data-p="windowMin" min="1" placeholder="мин">
             <input class="num" type="number" data-p="fadePct" min="0" placeholder="откат">
             <button class="btn" data-a="pumpadd">задать</button>
+            <button class="btn" data-a="pumpoff" title="Не собирать комиссии на пампе по этому токену. Порог, уровни и край леддера продолжат работать">не собирать на пампе</button>
           </div>
           </div>
           <div class="note">Что рисовать на графике</div>
@@ -3567,6 +3591,7 @@ select.btn { padding: 3px 4px; }
       else if (a === 'tabsopen') { tabsDo('tabsOpen'); return; }
       else if (a === 'tabsclose') { tabsDo('tabsClose'); return; }
       else if (a === 'pumpadd') { addPump(); }
+      else if (a === 'pumpoff') { togglePumpOff(ui.pumptok && ui.pumptok.value, true); }
       else if (a === 'tokall') { S.watchSkip = []; save(); pushWatch(); }
       else if (a === 'toknone') { S.watchSkip = ladders().map((l) => l.key); save(); pushWatch(); }
       else if (a === 'more') { S.more = !S.more; }
@@ -4285,6 +4310,9 @@ select.btn { padding: 3px 4px; }
       __boot: init,
       // Что ушло бы на график последним — тестам надо видеть посылку целиком.
       __lastLevels: () => lastLevels,
+      // Список леддеров, как его прочло окно: без него не видно, почему в
+      // настройках пусто — пары не пришли или их разобрали неверно.
+      __pairs: () => pairs,
     };
   } else if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init, { once: true });

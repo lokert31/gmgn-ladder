@@ -584,7 +584,11 @@ async function watchTick() {
       (p) => now - p.at <= winMin * 60000,
     );
     if (points.length && points[points.length - 1].src !== src) points = [];
-    const hit = S.pumpOn === false ? null : impulse(points, price, pumpPct, fade);
+    // По токену памп можно выключить отдельно: условия остаются, но сбор по
+    // импульсу не срабатывает. Остальные поводы работают как работали.
+    const hit = S.pumpOn === false || own.off === true
+      ? null
+      : impulse(points, price, pumpPct, fade);
     // Прошлую цену для уровней берём не из окна пампа, а из отдельной
     // памяти, которая переживает сон воркера. Раньше: воркер уснул ниже
     // уровня, проснулся выше — пересечения «не было», и тейк не срабатывал
