@@ -230,3 +230,28 @@ test('памп можно выключить у отдельного токен�
     w.close();
   }
 });
+
+test('выключатель пампа по токену виден сразу, а не спрятан в «Тонкой настройке»', async () => {
+  const T = '0x905b79845eaea281e4200f206fe7920dad685dd3';
+  const store = {
+    llChart: { watchOn: true, pumpOn: true, open: true, menu: true,
+               tabs: [{ chain: 'robinhood', addr: T, label: 'AAA/USDG' }] },
+    llPairs: { pairs: [{ chainId: 4663, token0: T, token1: USDG, symbols: 'AAA/USDG',
+                         ids: ['1'], lo: 0.0001, hi: 0.0007, group: 'g1' }], savedAt: Date.now() },
+  };
+  const w = await bootOverlay(store);
+  try {
+    const root = w.dom.window.document.getElementById('llc-host').shadowRoot;
+    const btn = root.querySelector('[data-a="pumpoff"]');
+    const more = root.querySelector('.menu .more');
+    assert.ok(btn, 'кнопки «не собирать на пампе» нет вовсе');
+    assert.ok(more && !more.contains(btn),
+      'кнопка спрятана в свёрнутой «Тонкой настройке» — там её не находят');
+    const pumpOn = root.querySelector('.menu [data-c="pumpOn"]');
+    assert.ok(pumpOn && (pumpOn.compareDocumentPosition(btn) & 4),
+      'блок по токенам должен идти после общей галки «Собирать на импульсе цены»');
+    assert.deepEqual(w.errors, []);
+  } finally {
+    w.close();
+  }
+});

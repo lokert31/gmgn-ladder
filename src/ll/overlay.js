@@ -3497,6 +3497,16 @@ select.btn { padding: 3px 4px; }
             <label>рост от <input class="num" type="number" data-n="pumpPct" min="1" step="1"> %</label>
             <label>за <input class="num" type="number" data-n="windowMin" min="1" step="1"> мин</label>
           </div>
+          <div class="note" title="Если у токена свои условия, общие на него не действуют. У спокойного пула «плюс 50% за 5 минут» не случится никогда, у свежего мема — каждый час">Свои условия пампа по токену</div>
+          <div class="pumps"></div>
+          <div class="row">
+            <select class="btn pumptok"></select>
+            <input class="num" type="number" data-p="pumpPct" min="1" placeholder="%">
+            <input class="num" type="number" data-p="windowMin" min="1" placeholder="мин">
+            <input class="num" type="number" data-p="fadePct" min="0" placeholder="откат">
+            <button class="btn" data-a="pumpadd">задать</button>
+            <button class="btn" data-a="pumpoff" title="Не собирать комиссии на пампе по этому токену. Порог, уровни и край леддера продолжат работать">не собирать на пампе</button>
+          </div>
           <label title="Цена подошла к верху леддера — собрать фисы. Выше верха ступени уже проданы, и фисы там не капают. Отмеченные ниже края ступеней работают вдобавок к этой галке, а не вместо неё">
             <input type="checkbox" data-c="edgeHi">
             Автосбор фисов у ВЕРХНЕЙ границы леддера</label>
@@ -3566,16 +3576,6 @@ select.btn { padding: 3px 4px; }
             спрашивать цену раз в <input class="num" type="number" data-n="everySec" min="1" step="1"> с</label>
           <label title="Собираем, пока цена держится у пика. Если она уже откатилась от вершины больше чем на столько — памп кончился, и собирать в падение мы не станем. Ноль — только на самом пике">
             &nbsp;&nbsp;и цена не ниже пика на <input class="num" type="number" data-n="fadePct" min="0" step="1"> %</label>
-          <div class="note" title="Если у токена свои условия, общие на него не действуют. У спокойного пула «плюс 50% за 5 минут» не случится никогда, у свежего мема — каждый час">Свои условия пампа по токену</div>
-          <div class="pumps"></div>
-          <div class="row">
-            <select class="btn pumptok"></select>
-            <input class="num" type="number" data-p="pumpPct" min="1" placeholder="%">
-            <input class="num" type="number" data-p="windowMin" min="1" placeholder="мин">
-            <input class="num" type="number" data-p="fadePct" min="0" placeholder="откат">
-            <button class="btn" data-a="pumpadd">задать</button>
-            <button class="btn" data-a="pumpoff" title="Не собирать комиссии на пампе по этому токену. Порог, уровни и край леддера продолжат работать">не собирать на пампе</button>
-          </div>
           </div>
           <div class="note">Что рисовать на графике</div>
           <label title="Синие полосы слева: сколько денег стоит на каждом уровне цены во всём пуле">
