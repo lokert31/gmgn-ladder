@@ -85,3 +85,6 @@ if git remote get-url origin >/dev/null 2>&1; then
     echo "GitHub не принял push — версия сохранена локально, отправь позже: git push --follow-tags"
   fi
 fi
+
+# И в открытый репозиторий — тот же код без истории разработки.
+./tools/publish.sh "$VER" "$MSG" || echo "В открытый репозиторий не ушло — ./tools/publish.sh $VER \"$MSG\" вручную"
