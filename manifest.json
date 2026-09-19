@@ -1,0 +1,108 @@
+{
+  "manifest_version": 3,
+  "name": "GMGN Holder Entries",
+  "version": "3.28.3",
+  "description": "Топ-холдеры на графике GMGN + график GMGN поверх Liquidity Ladder. SOL / BSC / Robinhood и другие чейны.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "tabs",
+    "tabGroups",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "https://gmgn.ai/*",
+    "https://liquidityladder.it.com/*",
+    "https://robinhood-mainnet.g.alchemy.com/*",
+    "https://api.geckoterminal.com/*",
+    "https://robinhood.rpc.orbitflare.com/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "gmgn-frame",
+        "enabled": true,
+        "path": "rules/gmgn-frame.json"
+      }
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://liquidityladder.it.com/*"
+      ],
+      "js": [
+        "src/ll/tap.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://gmgn.ai/*"
+      ],
+      "js": [
+        "src/bridge.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://gmgn.ai/*"
+      ],
+      "js": [
+        "src/panel.js"
+      ],
+      "css": [
+        "src/panel.css"
+      ],
+      "world": "ISOLATED",
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://liquidityladder.it.com/*"
+      ],
+      "js": [
+        "src/ll/overlay.js"
+      ],
+      "world": "ISOLATED",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://gmgn.ai/*"
+      ],
+      "js": [
+        "src/lp.js"
+      ],
+      "world": "ISOLATED",
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "src/sw.js"
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "action": {
+    "default_title": "Настройки GMGN × Liquidity Ladder",
+    "default_popup": "src/menu.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "options_ui": {
+    "page": "src/menu.html",
+    "open_in_tab": true
+  }
+}

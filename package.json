@@ -1,0 +1,12 @@
+{
+  "name": "gmgn-holder-entries",
+  "version": "3.28.3",
+  "private": true,
+  "description": "Тесты расширения. Само расширение сборки не требует.",
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3"
+  }
+}

@@ -1,0 +1,197 @@
+#gho-panel {
+  position: fixed;
+  right: 12px;
+  bottom: 44px;
+  width: 320px;
+  max-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(14, 16, 22, .97);
+  border: 1px solid #262b38;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .55);
+  color: #e6e8ee;
+  font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  z-index: 2147483000;
+  overflow: hidden;
+}
+
+#gho-panel.gho-collapsed .gho-body { display: none; }
+
+/* внутри оверлея на Liquidity Ladder правый край обрезан кропом */
+#gho-panel.gho-inframe {
+  left: 12px;
+  right: auto;
+  bottom: 12px;
+  width: 300px;
+  max-height: 70vh;
+}
+
+.gho-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  background: #171a23;
+  border-bottom: 1px solid #262b38;
+  cursor: default;
+  user-select: none;
+}
+
+.gho-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, .8);
+}
+
+.gho-title { font-weight: 600; font-size: 12px; }
+
+.gho-count {
+  margin-left: auto;
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #7c8496;
+}
+
+.gho-icon {
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  background: transparent;
+  border: 1px solid #2c3242;
+  border-radius: 5px;
+  color: #9aa3b5;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+}
+.gho-icon:hover { background: #222836; color: #e6e8ee; }
+
+.gho-body { display: flex; flex-direction: column; min-height: 0; }
+
+.gho-controls {
+  padding: 8px 10px;
+  border-bottom: 1px solid #20242f;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.gho-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #b6bdcc;
+  cursor: pointer;
+}
+.gho-switch input { accent-color: #4ade80; margin: 0; cursor: pointer; }
+
+.gho-range {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #b6bdcc;
+  margin-top: 2px;
+}
+.gho-range input {
+  width: 54px;
+  background: #0e1118;
+  border: 1px solid #2c3242;
+  border-radius: 4px;
+  color: #e6e8ee;
+  padding: 2px 5px;
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.gho-range input:focus { outline: 1px solid #3d82f6; }
+
+.gho-status {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #7c8496;
+  border-bottom: 1px solid #20242f;
+}
+.gho-status.gho-err { color: #f87171; }
+.gho-status.gho-hint { color: #5f6878; }
+.gho-status.gho-warnline { color: #e0b155; }
+
+.gho-list { overflow-y: auto; min-height: 0; }
+.gho-list::-webkit-scrollbar { width: 8px; }
+.gho-list::-webkit-scrollbar-thumb { background: #2c3242; border-radius: 4px; }
+
+.gho-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #1a1e28;
+  cursor: pointer;
+}
+.gho-row:hover { background: #1b202b; }
+.gho-row.gho-sel { background: #1f2836; box-shadow: inset 2px 0 0 #4ade80; }
+
+.gho-rank {
+  width: 18px;
+  text-align: right;
+  color: #5f6878;
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  flex: none;
+}
+
+.gho-main { flex: 1; min-width: 0; }
+
+.gho-line1 { display: flex; align-items: center; gap: 5px; }
+.gho-line2 { font-size: 11px; color: #98a1b2; margin-top: 1px; }
+
+.gho-addr { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; color: #cfd5e1; }
+
+.gho-tag {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #263042;
+  color: #8fa4c4;
+  text-transform: uppercase;
+}
+.gho-tag.gho-warn { background: #3a2226; color: #f0a0a0; }
+
+.gho-dim { color: #5f6878; }
+
+.gho-right { text-align: right; flex: none; }
+.gho-pct { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.gho-pnl { font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: 1px; }
+.gho-up { color: #4ade80; }
+.gho-down { color: #f87171; }
+
+/* --- поле интервала внутри переключателя --- */
+.gho-num {
+  width: 46px;
+  background: #0e1118;
+  border: 1px solid #2c3242;
+  border-radius: 4px;
+  color: #e6e8ee;
+  padding: 1px 4px;
+  margin-left: auto;
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.gho-num:focus { outline: 1px solid #3d82f6; }
+
+/* --- движение позиции --- */
+.gho-move {
+  font: 9px ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.gho-sold   { background: #3a2226; color: #f8a0a0; }
+.gho-bought { background: #1d3326; color: #86efac; }
+.gho-exit   { background: #3a1f1f; color: #ff8080; }
+.gho-new    { background: #24304a; color: #93b4ef; }
+
+.gho-row.gho-fx-sold   { animation: gho-flash-red .9s ease-out; }
+.gho-row.gho-fx-exited { animation: gho-flash-red .9s ease-out; opacity: .65; }
+.gho-row.gho-fx-bought { animation: gho-flash-green .9s ease-out; }
+.gho-row.gho-fx-new    { animation: gho-flash-blue .9s ease-out; }
+
+@keyframes gho-flash-red   { from { background: rgba(248,113,113,.28); } to { background: transparent; } }
+@keyframes gho-flash-green { from { background: rgba(74,222,128,.24); }  to { background: transparent; } }
+@keyframes gho-flash-blue  { from { background: rgba(96,148,239,.24); }  to { background: transparent; } }

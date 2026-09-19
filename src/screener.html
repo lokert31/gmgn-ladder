@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Пулы Robinhood — где лить</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --line:#2b3240; --text:#e6edf3; --dim:#9aa4b2; --green:#34d399; --yellow:#fbbf24; --red:#f87171; --blue:#60a5fa; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+  header { padding:16px 20px 10px; border-bottom:1px solid var(--line); }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .sub { color:var(--dim); }
+  .bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:10px 20px; border-bottom:1px solid var(--line); }
+  button, select, input { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 10px; font:inherit; }
+  button { cursor:pointer; } button:hover { border-color:var(--blue); }
+  label { color:var(--dim); display:flex; gap:6px; align-items:center; }
+  input[type=number] { width:80px; }
+  #status { color:var(--dim); margin-left:auto; }
+  #sum { padding:8px 20px; color:var(--dim); }
+  #sum b { color:var(--text); }
+  .wrap { overflow-x:auto; padding:0 20px 30px; }
+  table { border-collapse:collapse; width:100%; min-width:1100px; font-variant-numeric:tabular-nums; }
+  th { text-align:right; color:var(--dim); font-weight:500; padding:8px 8px; border-bottom:1px solid var(--line); cursor:pointer; white-space:nowrap; position:sticky; top:0; background:var(--bg); }
+  th:first-child, td:first-child { text-align:left; }
+  th.on { color:var(--text); }
+  td { text-align:right; padding:7px 8px; border-bottom:1px solid #1c2230; white-space:nowrap; }
+  tr:hover td { background:#131a24; }
+  a { color:var(--blue); text-decoration:none; } a:hover { text-decoration:underline; }
+  .g { color:var(--green); } .y { color:var(--yellow); } .r { color:var(--red); } .d { color:var(--dim); }
+  .two { display:flex; flex-direction:column; align-items:flex-end; line-height:1.2; }
+  .two small { color:var(--dim); font-size:11px; }
+  .note { color:var(--dim); padding:0 20px 20px; max-width:900px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Пулы Robinhood — где лить</h1>
+  <div class="sub">Топ токенов по обороту, разобранный для LP: сколько платят ликвидности у цены, кто и сколько залил, куда двигается цена.</div>
+</header>
+<div class="bar">
+  <button id="go">Разобрать топ</button>
+  <label>токенов <select id="count"><option>20</option><option selected>40</option><option>60</option><option>100</option></select></label>
+  <label><input type="checkbox" id="hideFall" checked> скрыть «падает»</label>
+  <label>у цены от $<input type="number" id="minNear" value="1000" min="0" step="500"></label>
+  <span id="status">нажми «Разобрать топ»</span>
+</div>
+<div id="sum"></div>
+<div class="wrap"><table>
+  <thead><tr>
+    <th data-k="symbol">Токен</th>
+    <th data-k="yield1" class="on">Доходность у цены, час ▾</th>
+    <th data-k="fees1">Фисы людям: час · сутки</th>
+    <th data-k="near">У цены ±10%</th>
+    <th data-k="tvlPeople">Залили люди · за сутки</th>
+    <th data-k="tvlLaunchpad">Лаунчпад</th>
+    <th data-k="vol1">Объём: час · сутки</th>
+    <th data-k="h6">Цена 1ч · 6ч · 24ч</th>
+    <th data-k="riskRank">Риск</th>
+    <th data-k="best">Лучший пул</th>
+  </tr></thead>
+  <tbody id="rows"></tbody>
+</table></div>
+<div class="note">
+  Доходность у цены — фисы всех пулов людей за последний час, делённые на ликвидность людей в ±10% от цены.
+  Её и получает тот, кто стоит у цены. Считается по токену, а не по пулу: фисы на доллар у пулов одного токена
+  почти одинаковые — их выравнивает арбитраж. «Залили люди» — все пулы, кроме пула лаунчпада. «За сутки» появится,
+  когда наберётся история: скринер запоминает каждый разбор. Данные: GeckoTerminal (пулы, объём) и цепь (чей пул,
+  ликвидность у цены). Снимок на момент разбора, не совет.
+</div>
+<script src="screener.js"></script>
+</body>
+</html>
