@@ -1,6 +1,6 @@
 {
   "name": "gmgn-holder-entries",
-  "version": "3.31.0",
+  "version": "3.32.0",
   "private": true,
   "description": "Тесты расширения. Само расширение сборки не требует.",
   "scripts": {

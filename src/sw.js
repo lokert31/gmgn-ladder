@@ -13,6 +13,7 @@
 importScripts('log.js');
 importScripts('chain.js');
 importScripts('watch.js');
+importScripts('upd.js');
 
 const KEY = 'ghoParams';
 const BASE = 'https://gmgn.ai';
@@ -918,6 +919,26 @@ const HANDLERS = {
     let own = false;
     try { own = self.GHO_WATCH.isMine(id); } catch (e) { own = false; }
     return { ok: true, pending: had, mine: own };
+  },
+
+  // Обновление расширения: распакованное Chrome сам не обновляет, поэтому
+  // про новую версию рассказываем мы.
+  async updState() {
+    try { return { ok: true, ...(await self.GHO_UPD.state()) }; }
+    catch (e) { return { ok: false, error: String(e && e.message) }; }
+  },
+
+  async updCheck() {
+    try {
+      await self.GHO_UPD.check(true);
+      return { ok: true, ...(await self.GHO_UPD.state()) };
+    } catch (e) { return { ok: false, error: String(e && e.message) }; }
+  },
+
+  // Человек положил новые файлы в папку — перечитываем её.
+  updApply() {
+    try { return self.GHO_UPD.apply(); }
+    catch (e) { return { ok: false, error: String(e && e.message) }; }
   },
 
   // Вкладка сторожа отчитывается, на каком она шаге. Это признак жизни:

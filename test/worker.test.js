@@ -30,7 +30,7 @@ function bootWorker() {
         onRemoved: { addListener() {} },
       },
     },
-    URL, URLSearchParams, TextEncoder, TextDecoder, Promise, Date, Math, JSON,
+    URL, URLSearchParams, TextEncoder, TextDecoder, AbortController, Promise, Date, Math, JSON,
     Number, String, BigInt, Array, Object, Error, Set, Map, RegExp, parseInt, parseFloat,
   };
   // Таймеры настоящие: раздача поручений вкладкам держится на тайм-ауте,
@@ -879,10 +879,12 @@ test('каждое сообщение странице и воркеру кто-
   const pn = fs.readFileSync(path.join(SRC, 'panel.js'), 'utf8');
   const lp = fs.readFileSync(path.join(SRC, 'lp.js'), 'utf8');   // карточка LP на GMGN
   const sc = fs.readFileSync(path.join(SRC, 'screener.js'), 'utf8');   // страница-скринер
+  const mn = fs.readFileSync(path.join(SRC, 'menu.js'), 'utf8');      // меню расширения
   const asked = (name) => ov.includes("'" + name + "'")
     || pn.includes("'" + name + "'")
     || lp.includes("'" + name + "'")
     || sc.includes("'" + name + "'")
+    || mn.includes("'" + name + "'")
     || wt.includes('"' + name + '"');
   const dead = [...handlers].filter((h) => !asked(h));
   assert.deepEqual(dead, [], 'обработчики никто не зовёт: ' + dead.join(', '));
@@ -1621,4 +1623,83 @@ test('страница отчитывается о шагах, иначе сто
     'пауза перед повтором свапа — самое длинное молчание, о ней надо предупредить');
   const sw = fs.readFileSync(path.join(SRC, 'sw.js'), 'utf8');
   assert.match(sw, /llStep\(msg, sender\)/, 'воркер не принимает пульс');
+});
+
+/** Воркер с ответом GitHub про последний релиз. */
+function bootUpd(release, ver) {
+  const scope = bootWorker();
+  const store = {};
+  scope.chrome.storage.local.get = async (k) => ({ [k]: store[k] });
+  scope.chrome.storage.local.set = async (box) => { Object.assign(store, box); };
+  scope.chrome.runtime.getManifest = () => ({ version: ver || '3.31.0' });
+  scope.chrome.runtime.getURL = (p) => 'chrome-extension://test/' + p;
+  scope.chrome.action = {
+    setBadgeText(o) { store.__badge = o.text; },
+    setBadgeBackgroundColor() {},
+    setTitle() {},
+  };
+  scope.chrome.notifications = { create(id) { store.__told = id; } };
+  scope.fetch = async () => ({ ok: true, status: 200, json: async () => release });
+  vm.runInContext(fs.readFileSync(path.join(SRC, 'upd.js'), 'utf8'), scope, { filename: 'upd.js' });
+  return { scope, store, U: scope.GHO_UPD };
+}
+
+const RELEASE = {
+  tag_name: 'v3.40.0',
+  body: 'плашка обновления',
+  assets: [{ name: 'gmgn-ladder-v3.40.0.zip', browser_download_url: 'https://example.invalid/a.zip' }],
+};
+
+test('номера версий сравниваются числами, а не строками', () => {
+  const { U } = bootUpd(RELEASE);
+  assert.equal(U.cmpVer('3.40.0', '3.4.0'), 1, '3.40 новее 3.4 — по строкам вышло бы наоборот');
+  assert.equal(U.cmpVer('3.31.0', '3.31.0'), 0);
+  assert.equal(U.cmpVer('v3.9.1', '3.10.0'), -1);
+});
+
+test('новая версия на GitHub видна значку, меню и уведомлением', async () => {
+  const { store, U } = bootUpd(RELEASE, '3.31.0');
+  await U.check(true);
+  const st = await U.state();
+  assert.equal(st.fresh, true, 'новая версия должна считаться новой');
+  assert.equal(st.ver, '3.40.0');
+  assert.equal(st.have, '3.31.0');
+  assert.equal(st.url, 'https://example.invalid/a.zip', 'кнопка «скачать» должна вести на архив релиза');
+  assert.equal(store.__badge, '↑', 'без значка человек так и не узнает про обновление');
+  assert.equal(store.__told, 'gho-upd-3.40.0', 'про новую версию говорим один раз уведомлением');
+});
+
+test('своя версия не старше — плашки нет и значок чистый', async () => {
+  const { store, U } = bootUpd(RELEASE, '3.40.0');
+  await U.check(true);
+  const st = await U.state();
+  assert.equal(st.fresh, false);
+  assert.equal(store.__badge, '', 'значок не должен звать обновляться на ровном месте');
+  assert.equal(store.__told, undefined, 'уведомления быть не должно');
+});
+
+test('GitHub не ответил — проверка не роняет воркер и говорит почему', async () => {
+  const { scope, U } = bootUpd(RELEASE, '3.31.0');
+  scope.fetch = async () => ({ ok: false, status: 403, json: async () => ({}) });
+  await U.check(true);
+  const st = await U.state();
+  assert.match(st.err, /лимит запросов/, 'причина должна быть словами: ' + st.err);
+  assert.equal(st.fresh, false, 'без ответа не выдумываем новую версию');
+});
+
+test('обновление доступно всюду, где человек смотрит', () => {
+  const html = fs.readFileSync(path.join(SRC, 'menu.html'), 'utf8');
+  for (const id of ['upd', 'updcheck', 'updget', 'updapply']) {
+    assert.ok(html.includes('id="' + id + '"'), 'в меню нет ' + id);
+  }
+  const menu = fs.readFileSync(path.join(SRC, 'menu.js'), 'utf8');
+  assert.match(menu, /type: 'updApply'/, 'нет кнопки перезапуска — обновление останется ручным');
+  const overlay = fs.readFileSync(path.join(SRC, 'll', 'overlay.js'), 'utf8');
+  assert.match(overlay, /function showUpd\(box\)/, 'в шапке окна нет плашки обновления');
+  assert.match(overlay, /changes\.ghoUpd/, 'плашка должна появляться сразу, а не после перезагрузки страницы');
+  const sw = fs.readFileSync(path.join(SRC, 'sw.js'), 'utf8');
+  assert.match(sw, /importScripts\('upd\.js'\)/);
+  const man = JSON.parse(fs.readFileSync(path.join(SRC, '..', 'manifest.json'), 'utf8'));
+  assert.ok(man.host_permissions.includes('https://api.github.com/*'),
+    'без разрешения на api.github.com проверка обновлений не уйдёт');
 });

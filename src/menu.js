@@ -141,3 +141,54 @@
   });
   show();
 })();
+
+/* ---------- обновление ----------
+ *
+ * Распакованное расширение Chrome не обновляет сам: человек живёт со старой
+ * версией и не знает об этом. Воркер раз в шесть часов спрашивает GitHub,
+ * а тут показываем ответ и даём две кнопки — скачать и перезапустить.
+ */
+(function () {
+  const box = document.getElementById('upd');
+  const when = document.getElementById('updwhen');
+  if (!box || !when) return;
+  const ask = (msg) => new Promise((res) => {
+    try { chrome.runtime.sendMessage(msg, (r) => { void chrome.runtime.lastError; res(r || null); }); }
+    catch (e) { res(null); }
+  });
+
+  const ago = (at) => {
+    if (!at) return 'ещё не проверял';
+    const m = Math.round((Date.now() - at) / 60000);
+    if (m < 1) return 'проверил только что';
+    if (m < 60) return 'проверил ' + m + ' мин назад';
+    return 'проверил ' + Math.round(m / 60) + ' ч назад';
+  };
+
+  let url = '';
+  function show(r) {
+    if (!r || !r.ok) { when.textContent = 'воркер не отвечает'; return; }
+    url = r.url || r.page || '';
+    box.classList.toggle('on', !!r.fresh);
+    if (r.fresh) {
+      document.getElementById('updver').textContent = r.ver;
+      document.getElementById('updnotes').textContent = r.notes || '';
+    }
+    when.textContent = (r.err ? r.err + ' · ' : '')
+      + (r.fresh ? 'у тебя ' + r.have : 'стоит последняя, ' + r.have) + ' · ' + ago(r.at);
+  }
+
+  document.getElementById('updcheck').addEventListener('click', async () => {
+    when.textContent = 'спрашиваю GitHub…';
+    show(await ask({ type: 'updCheck' }));
+  });
+  document.getElementById('updget').addEventListener('click', () => {
+    if (url) window.open(url, '_blank');
+  });
+  document.getElementById('updapply').addEventListener('click', async () => {
+    when.textContent = 'перезапускаю…';
+    await ask({ type: 'updApply' });
+  });
+
+  (async () => show(await ask({ type: 'updState' })))();
+})();

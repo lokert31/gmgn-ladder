@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GMGN Holder Entries",
-  "version": "3.31.0",
+  "version": "3.32.0",
   "description": "Топ-холдеры на графике GMGN + график GMGN поверх Liquidity Ladder. SOL / BSC / Robinhood и другие чейны.",
   "permissions": [
     "storage",
@@ -16,7 +16,8 @@
     "https://liquidityladder.it.com/*",
     "https://robinhood-mainnet.g.alchemy.com/*",
     "https://api.geckoterminal.com/*",
-    "https://robinhood.rpc.orbitflare.com/*"
+    "https://robinhood.rpc.orbitflare.com/*",
+    "https://api.github.com/*"
   ],
   "declarative_net_request": {
     "rule_resources": [

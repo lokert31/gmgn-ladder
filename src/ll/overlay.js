@@ -2836,6 +2836,40 @@
   }
 
   /**
+   * Плашка «вышла новая версия».
+   *
+   * Расширение стоит распакованным, и Chrome его не обновляет: без такой
+   * плашки человек просто живёт со старой версией. Номер приносит воркер,
+   * он же ходит на GitHub; тут только показываем и открываем страницу
+   * релиза по клику.
+   */
+  function showUpd(box) {
+    if (!ui || !ui.upd) return;
+    let have = '';
+    try { have = chrome.runtime.getManifest().version; } catch (e) { have = ''; }
+    const ver = box && box.ver;
+    const fresh = !!(ver && have && cmpVer(ver, have) > 0);
+    ui.upd.hidden = !fresh;
+    if (!fresh) return;
+    ui.upd.textContent = 'вышла версия ' + ver + ' ↗';
+    ui.upd.title = 'У тебя ' + have + '. Нажми — откроется страница релиза;'
+      + BR + 'дальше: распаковать архив поверх своей папки и нажать'
+      + BR + '«перезапустить» в настройках расширения (значок ⚙ в Chrome).';
+    ui.upd.dataset.url = (box && (box.url || box.page)) || '';
+  }
+
+  /** «3.31.0» против «3.4.1»: сравниваем числами, а не строками. */
+  function cmpVer(a, b) {
+    const x = String(a || '').split(/[^\d]+/).filter((v) => v !== '');
+    const y = String(b || '').split(/[^\d]+/).filter((v) => v !== '');
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+      const d = (Number(x[i]) || 0) - (Number(y[i]) || 0);
+      if (d) return d > 0 ? 1 : -1;
+    }
+    return 0;
+  }
+
+  /**
    * Признак жизни для сторожа: на каком шаге страница прямо сейчас.
    *
    * Без него сторож видит только «взялась и молчит» и не может отличить
@@ -3387,6 +3421,9 @@
          background: rgba(96,165,250,.16); color: #93c5fd; }
 .depth.bad { background: rgba(248,113,113,.16); color: #f87171; }
 .depth.all { background: rgba(148,163,184,.14); color: #a8b3c0; }
+.upd { padding: 3px 7px; border-radius: 5px; white-space: nowrap; cursor: pointer;
+       background: rgba(52,211,153,.16); color: #34d399; }
+.upd:hover { background: rgba(52,211,153,.3); }
 .pnl { padding: 3px 7px; border-radius: 5px; white-space: nowrap;
        background: rgba(74,222,128,.14); color: #4ade80; }
 .pnl.minus { background: rgba(248,113,113,.14); color: #f87171; }
@@ -3481,6 +3518,7 @@ select.btn { padding: 3px 4px; }
           <span class="liq" hidden></span>
           <span class="depth" hidden></span>
           <span class="depth all" hidden></span>
+          <span class="upd" hidden></span>
           <div class="acts"></div>
           <div class="tools">
             <button class="btn" data-a="menu" title="Настройки окна: что показывать и в каком масштабе">⚙</button>
@@ -3674,6 +3712,7 @@ select.btn { padding: 3px 4px; }
       liq: root.querySelector('.liq'),
       depth: root.querySelector('.depth'),
       depthAll: root.querySelector('.depth.all'),
+      upd: root.querySelector('.upd'),
       pnl: root.querySelector('.pnl'),
       acts: root.querySelector('.acts'),
       menu: root.querySelector('.menu'),
@@ -3763,6 +3802,8 @@ select.btn { padding: 3px 4px; }
           pushLevels();
           render();
         }
+        // Вышла новая версия — плашка появляется, не дожидаясь перезагрузки.
+        if (changes.ghoUpd) showUpd(changes.ghoUpd.newValue || {});
         // Сбор в другой вкладке — точка появляется и здесь.
         if (changes[CKEY] && changes[CKEY].newValue) {
           collects = changes[CKEY].newValue;
@@ -3789,6 +3830,10 @@ select.btn { padding: 3px 4px; }
         domDirty = true;
         pushLevels();
       });
+    } catch (e) { /* контекст расширения перезагрузили */ }
+
+    try {
+      chrome.storage.local.get('ghoUpd', (v) => showUpd((v && v.ghoUpd) || {}));
     } catch (e) { /* контекст расширения перезагрузили */ }
 
     try {
@@ -3929,7 +3974,14 @@ select.btn { padding: 3px 4px; }
       ui.ver.textContent = chrome.runtime.getManifest().version;
     } catch (e) { ui.ver.textContent = '—'; }
 
-    dragging(ui.bar, (dx, dy, g0) => ({ ...g0, x: g0.x + dx, y: g0.y + dy }), (e) => !!e.target.closest('.tab,[data-a]'));
+    if (ui.upd) {
+      ui.upd.addEventListener('click', () => {
+        const u = ui.upd.dataset.url;
+        if (u) window.open(u, '_blank');
+      });
+    }
+
+    dragging(ui.bar, (dx, dy, g0) => ({ ...g0, x: g0.x + dx, y: g0.y + dy }), (e) => !!e.target.closest('.tab,.upd,[data-a]'));
     dragging(ui.grip, (dx, dy, g0) => ({ ...g0, w: Math.max(320, g0.w + dx), h: Math.max(200, g0.h + dy) }));
   }
 
