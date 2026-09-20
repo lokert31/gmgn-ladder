@@ -1373,6 +1373,23 @@ async function closeTabsNow() {
 const mine = new Set();
 // Вкладки, которые прямо сейчас выполняют поручение: такие не закрываем.
 const busy = new Set();
+// Когда вкладка взялась за дело и когда она в последний раз подала признак
+// жизни. Без второго «работает долго» неотличимо от «спит»: Chrome
+// замораживает фоновые вкладки, и поручение повисает в них навсегда.
+const busySince = new Map();
+const stepAt = new Map();
+const silentRuns = new Map();
+
+// Сколько ждём вкладку. Пока она отчитывается о шагах — ждём долго: сбор с
+// проверкой занимает до минуты, а повтор свапа с паузами — все три. Молчит
+// совсем — значит спит или скрипт в ней умер, и ждать нечего.
+const WAIT = { silentMs: 40000, workMs: 4 * 60000, pollMs: 500 };
+
+/** Страница сказала, на каком она шаге, — это и есть признак жизни. */
+function markStep(tabId, step) {
+  if (tabId === undefined || tabId === null) return;
+  stepAt.set(tabId, { at: Date.now(), step: String(step || "") });
+}
 
 /*
  * Воркер в MV3 засыпает через полминуты без дела, и всё, что лежит в
@@ -1575,16 +1592,41 @@ async function handOut(tabs, msg) {
     .sort((a, b) => (a.id === home ? -1 : b.id === home ? 1 : 0));
   for (const tab of own) {
     busy.add(tab.id);
+    busySince.set(tab.id, Date.now());
+    stepAt.delete(tab.id);
     const r = await new Promise((res) => {
       let done = false;
       let timer = 0;
+      const start = Date.now();
       const finish = (v) => { if (!done) { done = true; clearTimeout(timer); res(v); } };
-      // Сбор с проверкой занимает до минуты: отметить позиции, нажать,
-      // дважды пересчитать фисы. Раньше ждали 20 секунд и считали молчание
-      // отказом — и отдавали тот же сбор следующей вкладке, то есть второй
-      // раз. Молчание — это «занята делом», а не «не могу».
-      timer = setTimeout(() => finish({ handled: true, did: "unknown",
-                                        why: "вкладка не ответила за 2 минуты" }), 120000);
+      // Ждём не по глухому тайм-ауту, а по признакам жизни. Сбор с проверкой
+      // занимает до минуты, повтор свапа с паузами — все три: молчание тут
+      // значит «занята делом». Но замороженная Chrome вкладка молчит так же,
+      // и с глухими двумя минутами она съедала повод за поводом сутками.
+      // Поэтому страница отчитывается о шагах, и ждём мы шагов, а не времени.
+      const watchdog = () => {
+        if (done) return;
+        const beat = stepAt.get(tab.id);
+        const last = beat ? beat.at : start;
+        if (Date.now() - last > WAIT.silentMs) {
+          finish({
+            handled: false,
+            silent: true,
+            why: beat
+              ? "замолчала на шаге «" + beat.step + "»"
+              : "не подала признаков жизни за " +
+                Math.round(WAIT.silentMs / 1000) + " с",
+          });
+          return;
+        }
+        if (Date.now() - start > WAIT.workMs) {
+          finish({ handled: true, did: "unknown",
+                   why: "не закончила за " + Math.round(WAIT.workMs / 60000) + " мин" });
+          return;
+        }
+        timer = setTimeout(watchdog, WAIT.pollMs);
+      };
+      timer = setTimeout(watchdog, WAIT.pollMs);
       try {
         chrome.tabs.sendMessage(tab.id, { ...msg, own: true }, (r) => {
           // Нет скрипта на странице — ответ приходит сразу с ошибкой.
@@ -1596,9 +1638,61 @@ async function handOut(tabs, msg) {
       }
     });
     busy.delete(tab.id);
+    busySince.delete(tab.id);
+    if (r && r.silent) {
+      // Молчит — поднимаем её и оставляем поручение ей же. Отдавать его
+      // соседней вкладке нельзя: вдруг эта всё-таки нажала «Collect».
+      const back = reviveTab(tab.id, msg, r.why);
+      return {
+        tabId: tab.id,
+        r: { handled: true, did: back ? "revive" : "fail", why: r.why },
+      };
+    }
+    silentRuns.delete(tab.id);
     if (r && r.handled) return { tabId: tab.id, r };
   }
   return null;
+}
+
+/**
+ * Вкладка взяла поручение и замолчала — вернуть её к жизни.
+ *
+ * Chrome замораживает фоновые вкладки, а после обновления расширения скрипт
+ * в старой вкладке умирает совсем. Снаружи это выглядит одинаково: взяла и
+ * молчит. Первый раз перезагружаем и отдаём ей то же поручение, второй раз
+ * подряд — закрываем, свежую заведёт keepTabs.
+ */
+function reviveTab(tabId, msg, why) {
+  const runs = (silentRuns.get(tabId) || 0) + 1;
+  silentRuns.set(tabId, runs);
+  if (self.GHO_LOG) {
+    self.GHO_LOG.at("watch")[runs > 1 ? "err" : "warn"](
+      runs > 1
+        ? "вкладка молчит второй раз — закрываю её"
+        : "вкладка молчит — перезагружаю и повторю",
+      { token: msg.label || msg.addr, why: why || "", tab: tabId },
+    );
+  }
+  if (runs > 1) {
+    silentRuns.delete(tabId);
+    forgetTab(tabId);
+    try {
+      const p = chrome.tabs.remove(tabId);
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } catch (e) { /* уже закрыта */ }
+    tabTrouble = "вкладка сторожа не отвечала — закрыл её, открою новую";
+    return false;
+  }
+  queueFor(tabId, msg);
+  readyAt.delete(tabId);
+  bornAt.set(tabId, Date.now());
+  reloadedAt.set(tabId, Date.now());
+  try {
+    const p = chrome.tabs.reload(tabId);
+    if (p && typeof p.catch === "function") p.catch(() => {});
+  } catch (e) { /* закрылась */ }
+  tabTrouble = "вкладка сторожа молчала — перезагрузил её, повторю сбор";
+  return true;
 }
 
 /**
@@ -1613,7 +1707,8 @@ const DID_TEXT = {
   sent: "нажал Collect, но пересчёт не показал, что фисы ушли",
   wait: "фисов на странице меньше порога — жду",
   dry: "проверка",
-  unknown: "вкладка занята и не ответила",
+  unknown: "вкладка взялась, но не закончила вовремя",
+  revive: "вкладка молчала — перезагрузил её, соберу в ней заново",
   reload: "сайт обновил сессию — перезагрузил вкладку, повторю",
   login: "на сайте слетел вход — войди в Liquidity Ladder",
   fail: "не вышло",
@@ -1887,6 +1982,9 @@ self.GHO_WATCH = {
   dryRun,
   flushPending,
   markReady,
+  markStep,
+  handOut,
+  WAIT,
   forgetTab,
   tabsReport,
   openTabsNow,

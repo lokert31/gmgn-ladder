@@ -920,6 +920,15 @@ const HANDLERS = {
     return { ok: true, pending: had, mine: own };
   },
 
+  // Вкладка сторожа отчитывается, на каком она шаге. Это признак жизни:
+  // по нему сторож отличает «работает долго» от «заморожена и молчит».
+  llStep(msg, sender) {
+    const id = sender && sender.tab && sender.tab.id;
+    try { self.GHO_WATCH.markStep(id, msg && msg.step); }
+    catch (e) { /* воркер только встал */ }
+    return { ok: true };
+  },
+
   // Вкладка сторожа сама входила заново после истёкшей сессии.
   relogin({ ok, step }) {
     try { self.GHO_WATCH.reloginReport(!!ok, step); } catch (e) { /* воркер только встал */ }

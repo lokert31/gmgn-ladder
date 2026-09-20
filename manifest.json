@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GMGN Holder Entries",
-  "version": "3.30.1",
+  "version": "3.31.0",
   "description": "Топ-холдеры на графике GMGN + график GMGN поверх Liquidity Ladder. SOL / BSC / Robinhood и другие чейны.",
   "permissions": [
     "storage",

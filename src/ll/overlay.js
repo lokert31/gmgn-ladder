@@ -2408,7 +2408,12 @@
       if (i >= times) break;
       const bumped = bumpSlippage(Number(S.slipStep) || 0);
       if (bumped) LOG.info(label + ': поднял проскальзывание', bumped);
-      await wait(RETRY_GAP[Math.min(i - 1, RETRY_GAP.length - 1)]);
+      const gap = RETRY_GAP[Math.min(i - 1, RETRY_GAP.length - 1)];
+      // Пауза перед повтором — самое длинное молчание страницы. Говорим о
+      // ней вслух, иначе сторож сочтёт вкладку заснувшей и перезагрузит её
+      // ровно посреди повторного свапа.
+      beat(label + ': жду ' + Math.round(gap / 1000) + ' с перед повтором ' + (i + 1));
+      await wait(gap);
     }
     LOG.err(label + ': не вышло за ' + times + ' попыток', { why: res.why });
     return { ...res, tries: times };
@@ -2653,6 +2658,12 @@
       return { handled: true, did: 'login', why: 'на сайте слетел вход' };
     }
     const want = String(msg.addr).toLowerCase();
+    // Без этой записи по журналу не отличить «страница не получила поручение»
+    // от «получила и встала»: раньше там был один сторож и ни слова страницы.
+    beat('принял поручение');
+    LOG.info('поручение принято', {
+      token: want, reason: msg.reason || '', act: msg.act || 'fees',
+    });
 
     // Повод пришёл по одному токену, а в Manage открыт другой — раньше такое
     // сообщение просто терялось, и уровень «не срабатывал». Загружаем нужные
@@ -2824,8 +2835,23 @@
     catch (e) { /* контекст расширения перезагрузили */ }
   }
 
+  /**
+   * Признак жизни для сторожа: на каком шаге страница прямо сейчас.
+   *
+   * Без него сторож видит только «взялась и молчит» и не может отличить
+   * долгий сбор от замороженной Chrome вкладки. Раньше вкладка, которую
+   * усыпили, съедала повод за поводом сутками, и фисы так и висели.
+   */
+  function beat(step) {
+    try {
+      chrome.runtime.sendMessage({ type: 'llStep', step: String(step || '') },
+                                 () => void chrome.runtime.lastError);
+    } catch (e) { /* контекст расширения перезагрузили */ }
+  }
+
   /** Короткая строка в шапке: почему окно вдруг само что-то нажало. */
   function impulseNote(text) {
+    beat(text);
     if (!ui || !ui.depthAll) return;
     ui.depthAll.hidden = false;
     ui.depthAll.textContent = text;

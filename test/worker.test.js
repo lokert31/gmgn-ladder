@@ -1550,3 +1550,75 @@ test('сторож не собирает на пампе там, где памп
     'условие «памп выключен у этого токена» не проверяется: ' + near.slice(0, 120));
   assert.ok(src.includes('pump: S.tokenPump'), 'настройки пампа по токену до сторожа не доезжают');
 });
+
+/** Своя вкладка сторожа с заданным id: заводим тем же путём, что и он сам. */
+async function ownTab(scope, id) {
+  scope.chrome.tabs.create = async () => ({ id });
+  await scope.GHO_WATCH.keepTabs(
+    [{ chain: 'robinhood', addr: '0xaaa', label: 'TOK' }],
+    { keepTabs: true },
+    true,
+  );
+  return { type: 'impulse', chain: 'robinhood', addr: '0xaaa', label: 'TOK',
+           reason: 'цена у верха диапазона', act: 'fees', minUsd: 5 };
+}
+
+test('замороженная вкладка не съедает повод: её перезагружают и повторяют сбор', async () => {
+  const scope = bootWorker();
+  const W = scope.GHO_WATCH;
+  W.WAIT.silentMs = 300;
+  W.WAIT.pollMs = 50;
+  W.WAIT.workMs = 5000;
+  const reloaded = [];
+  const removed = [];
+  scope.chrome.tabs.reload = (id) => { reloaded.push(id); return Promise.resolve(); };
+  scope.chrome.tabs.remove = (id) => { removed.push(id); return Promise.resolve(); };
+  // Вкладка молчит: ни ответа, ни шагов — ровно так выглядит уснувшая.
+  scope.chrome.tabs.sendMessage = () => {};
+
+  const msg = await ownTab(scope, 7);
+  const first = await W.handOut([{ id: 7 }], msg);
+  assert.equal(first.r.did, 'revive', 'молчание должно кончаться перезагрузкой: ' + JSON.stringify(first.r));
+  assert.deepEqual(reloaded, [7], 'вкладку не перезагрузили — она так и останется спать');
+  assert.equal(removed.length, 0, 'с первого раза вкладку не закрываем: она может просто спать');
+
+  // Второй раз подряд — вкладка безнадёжна, закрываем: свежую заведёт keepTabs.
+  const second = await W.handOut([{ id: 7 }], msg);
+  assert.equal(second.r.did, 'fail');
+  assert.deepEqual(removed, [7], 'после второго молчания вкладку надо закрыть');
+});
+
+test('вкладка, которая отчитывается о шагах, дорабатывает до конца', async () => {
+  const scope = bootWorker();
+  const W = scope.GHO_WATCH;
+  W.WAIT.silentMs = 300;
+  W.WAIT.pollMs = 50;
+  W.WAIT.workMs = 5000;
+  const reloaded = [];
+  scope.chrome.tabs.reload = (id) => { reloaded.push(id); return Promise.resolve(); };
+  // Работает дольше «тишины», но каждые 150 мс говорит, на каком она шаге.
+  scope.chrome.tabs.sendMessage = (id, m, cb) => {
+    let n = 0;
+    const tick = () => {
+      if (++n <= 6) { W.markStep(id, 'шаг ' + n); setTimeout(tick, 150); return; }
+      cb({ handled: true, did: 'collected', usd: 56 });
+    };
+    setTimeout(tick, 150);
+  };
+
+  const msg = await ownTab(scope, 9);
+  const got = await W.handOut([{ id: 9 }], msg);
+  assert.equal(got.r.did, 'collected', 'работающую вкладку нельзя обрывать: ' + JSON.stringify(got.r));
+  assert.deepEqual(reloaded, [], 'её перезагрузили посреди сбора');
+});
+
+test('страница отчитывается о шагах, иначе сторожу нечего слушать', () => {
+  const overlay = fs.readFileSync(path.join(SRC, 'll', 'overlay.js'), 'utf8');
+  assert.match(overlay, /function beat\(step\)/, 'нет пульса со страницы');
+  assert.match(overlay, /function impulseNote\(text\) \{\s*\n\s*beat\(text\);/,
+    'каждый шаг сторожа должен уходить в пульс, иначе вкладку сочтут спящей');
+  assert.match(overlay, /beat\(label \+ ': жду '/,
+    'пауза перед повтором свапа — самое длинное молчание, о ней надо предупредить');
+  const sw = fs.readFileSync(path.join(SRC, 'sw.js'), 'utf8');
+  assert.match(sw, /llStep\(msg, sender\)/, 'воркер не принимает пульс');
+});
